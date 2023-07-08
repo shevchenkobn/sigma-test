@@ -1,6 +1,4 @@
-from dataclasses import dataclass
 import sys
-import typing
 from collections import deque
 from enum import Enum
 
@@ -19,42 +17,36 @@ class GodzillaState(Enum):
     Untouched = 0
 
 
-@dataclass
 class Cell:
-    kind: CellKind
-    godz: GodzillaState
+    def __init__(self, kind, godz):
+        self.kind = kind
+        self.godz = godz
 
 
-Coords = typing.Tuple[int, int]
-"""Component order is (y, x)"""
-LineRange = typing.List[typing.List[int]]
-"""Component order is [[y, x1, x2], [x, y1, y2]]"""
-
-
-@dataclass
 class Mech:
-    pos: Coords
-    path: deque  # deque[Coords]
+    def __init__(self, pos, path):
+        self.pos = pos
+        self.path = path
 
 
-@dataclass
 class Tokyo:
     # flooding implementation implicitly relies on it
-    directions: typing.ClassVar[typing.Tuple[typing.Tuple[Coords]]] = ((-1, 0), (0, 1), (1, 0), (0, -1))
+    directions = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
-    map: typing.List[typing.List[Cell]]
-    width: int
-    height: int
+    def __init__(self, m, width, height, gpos, mechs):
+        self.map = m
+        self.width = width
+        self.height = height
 
-    gpos: Coords
-    mechs: typing.List[Mech]
+        self.gpos = gpos
+        self.mechs = mechs
 
-    gflood: LineRange
-    next_gpos: typing.Union[Coords, None] = None
-    destroyed_count: int = 0
+        self.gflood = [[gpos[0], gpos[1], gpos[1]], [gpos[1], gpos[0], gpos[0]]]
+        self.next_gpos = None
+        self.destroyed_count = 0
 
     @classmethod
-    def decode(cls, width: int, height: int, get_next_line: typing.Callable[[], str]):
+    def decode(cls, width, height, get_next_line):
         m = []
         gpos = None
         mpos = []
@@ -72,16 +64,16 @@ class Tokyo:
                 cell = Cell(kind, godz)
                 row.append(cell)
             m.append(row)
-        return cls(m, width, height, gpos, mpos, [[gpos[0], gpos[1], gpos[1]], [gpos[1], gpos[0], gpos[0]]])
+        return cls(m, width, height, gpos, mpos)
 
-    def refresh_godz_next(self) -> typing.Union[Coords, None]:
+    def refresh_godz_next(self):
         self.next_gpos = self.get_godz_next()
         return self.next_gpos
 
-    def is_pos_valid(self, y: int, x: int):
+    def is_pos_valid(self, y, x):
         return 0 <= y < self.height and 0 <= x < self.width
 
-    def get_godz_next(self) -> typing.Union[Coords, None]:
+    def get_godz_next(self):
         y, x = self.gpos
         first_untouched = None
         for (oy, ox) in self.directions:
@@ -110,12 +102,9 @@ class Tokyo:
         return self.gpos
 
     def refresh_godz_flood(self, force=False):
-        # gpos = self.next_gpos if for_next else self.gpos
-        # if not gpos:
-        #     return self.gflood
         yr, xr = self.gflood
-
         y, x = self.gpos
+
         by, bx = yr[0], xr[0]
         yr[0], xr[0] = y, x
         if force or y < by or x != bx:
@@ -141,7 +130,7 @@ class Tokyo:
 
         return self.gflood
 
-    def is_in_gflood(self, p: Coords):
+    def is_in_gflood(self, p):
         gfy, gfx = self.gflood
         return gfy[0] == p[0] and gfy[1] <= p[1] <= gfy[2] or gfx[0] == p[1] and gfx[1] <= p[0] <= gfx[2]
 
