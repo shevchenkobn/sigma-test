@@ -25,29 +25,29 @@ class Cell:
     godz: GodzillaState
 
 
-Coords = tuple[int, int]
+Coords = typing.Tuple[int, int]
 """Component order is (y, x)"""
-LineRange = list[list[int, int, int], list[int, int, int]]
+LineRange = typing.List[typing.List[int]]
 """Component order is [[y, x1, x2], [x, y1, y2]]"""
 
 
 @dataclass
 class Mech:
     pos: Coords
-    path: deque[Coords]
+    path: deque  # deque[Coords]
 
 
 @dataclass
 class Tokyo:
     # flooding implementation implicitly relies on it
-    directions: typing.ClassVar[tuple[tuple[Coords]]] = ((-1, 0), (0, 1), (1, 0), (0, -1))
+    directions: typing.ClassVar[typing.Tuple[typing.Tuple[Coords]]] = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
-    map: list[list[Cell]]
+    map: typing.List[typing.List[Cell]]
     width: int
     height: int
 
     gpos: Coords
-    mechs: list[Mech]
+    mechs: typing.List[Mech]
 
     gflood: LineRange
     next_gpos: typing.Union[Coords, None] = None
