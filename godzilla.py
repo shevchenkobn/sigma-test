@@ -6,9 +6,7 @@ from enum import Enum
 class CellKind(Enum):
     Residential = 'R'
     Empty = '.'
-    # Godzilla = 'G'
     Destroyed = 'X'
-    # Mech = 'M'
 
 
 class GodzillaState(Enum):
@@ -27,6 +25,7 @@ class Mech:
     def __init__(self, pos, path):
         self.pos = pos
         self.path = path
+        self.goal = pos
 
 
 class Tokyo:
@@ -76,7 +75,7 @@ class Tokyo:
     def get_godz_next(self):
         y, x = self.gpos
         first_untouched = None
-        for (oy, ox) in self.directions:
+        for oy, ox in self.directions:
             ny, nx = y + oy, x + ox
             if not self.is_pos_valid(ny, nx):
                 continue
@@ -143,6 +142,8 @@ class Tokyo:
 
     def refresh_mech_paths(self):
         for m in self.mechs:
+            if self.is_in_gflood(m.goal):
+                continue
             q = [m.pos]
             steps = {m.pos: None}
 
@@ -177,6 +178,7 @@ class Tokyo:
                 else:
                     break
             m.path = path
+            m.goal = last
 
     def update_mechs_pos(self):
         for m in self.mechs:
