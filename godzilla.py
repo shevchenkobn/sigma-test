@@ -45,12 +45,13 @@ class Tokyo:
         self.destroyed_count = 0
 
     @classmethod
-    def decode(cls, width, height, get_next_line):
+    def decode(cls, inf):
+        width, height = (int(d) for d in inf.readline().split(' '))
         m = []
         gpos = None
         mpos = []
         for y in range(height):
-            line = get_next_line()
+            line = inf.readline()
             row = []
             for x in range(width):
                 kind = CellKind('.' if line[x] != 'R' else line[x])
@@ -101,6 +102,7 @@ class Tokyo:
         return self.gpos
 
     def refresh_godz_flood(self, force=False):
+        """If residential cell is found at the boundary, it is included into the flood."""
         yr, xr = self.gflood
         y, x = self.gpos
 
@@ -144,7 +146,7 @@ class Tokyo:
         for m in self.mechs:
             if self.is_in_gflood(m.goal):
                 continue
-            q = [m.pos]
+            q = deque([m.pos])
             steps = {m.pos: None}
 
             last = None
@@ -220,8 +222,7 @@ def main():
 
     sim_count = int(inf.readline())
     for _ in range(sim_count):
-        width, height = (int(d) for d in inf.readline().split(' '))
-        tokyo = Tokyo.decode(width, height, lambda: inf.readline())
+        tokyo = Tokyo.decode(inf)
         destroyed_count = tokyo.simulate()
         print(destroyed_count, file=outf)
 
