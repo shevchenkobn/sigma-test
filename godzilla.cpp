@@ -99,17 +99,18 @@ struct MechState {
   Coords from = Coords::none;
 
   MechState() {}
-  MechState(int mechI, int turnN, Coords from) : mechI(mechI), turnN(turnN), from(from) {}
+  MechState(int mechI, int turnN, const Coords& from) : mechI(mechI), turnN(turnN), from(from) {}
 };
 const MechState MechState::none = MechState();
 
 struct Cell {
   CellKind kind = CellKind::Empty;
   GodzillaStatus godz = GodzillaStatus::Untouched;
+  MechState mech = MechState::none;
 
   Cell() {}
-  Cell(CellKind kind, GodzillaStatus godz) : kind(kind), godz(godz) {}
-  Cell(const Cell& other) : kind(other.kind), godz(other.godz) {}
+  Cell(CellKind kind, GodzillaStatus godz, const MechState& mech = MechState::none) : kind(kind), godz(godz), mech(mech) {}
+  Cell(const Cell& other) : kind(other.kind), godz(other.godz), mech(mech) {}
 };
 
 struct Mech {
@@ -135,20 +136,6 @@ struct Flood : Coords {
 class Tokyo {
   public:
     static const std::vector<Coords> directions;
-
-    std::vector<std::vector<Cell>> map;
-    const int width;
-    const int height;
-
-    Coords gPos;
-    /**
-     * Readonly vector of mutable objects.
-     * TODO: make readonly without [std::span](https://en.cppreference.com/w/cpp/container/span) or custom class.
-     */
-    std::vector<Mech> mechs;
-    Flood gFlood;
-    Coords nextGPos = Coords::none;
-    int destroyedCount = 0;
 
     /**
      * Return value requires delete.
@@ -250,34 +237,34 @@ class Tokyo {
       gFlood.x = gPos.x;
       if (force || gPos.y < b.y || gPos.x != b.x) {
         for (int d = gPos.y - 1; d >= 0; d -= 1) {
-          gFlood.yLimits.first = d;
           if (map[d][gPos.x].kind == CellKind::Residential) {
             break;
           }
+          gFlood.yLimits.first = d;
         }
       }
       if (force || gPos.y > b.y || gPos.x != b.x) {
         for (int d = gPos.y + 1; d < height; d += 1) {
-          gFlood.yLimits.second = d;
           if (map[d][gPos.x].kind == CellKind::Residential) {
             break;
           }
+          gFlood.yLimits.second = d;
         }
       }
       if (force || gPos.x < b.x || gPos.y != b.y) {
         for (int d = gPos.x - 1; d >= 0; d -= 1) {
-          gFlood.xLimits.first = d;
           if (map[gPos.y][d].kind == CellKind::Residential) {
             break;
           }
+          gFlood.xLimits.first = d;
         }
       }
       if (force || gPos.x > b.x || gPos.y != b.y) {
         for (int d = gPos.x + 1; d < width; d += 1) {
-          gFlood.xLimits.second = d;
           if (map[gPos.y][d].kind == CellKind::Residential) {
             break;
           }
+          gFlood.xLimits.second = d;
         }
       }
       return gFlood;
@@ -294,6 +281,22 @@ class Tokyo {
         const auto& m = mechs[i];
         if (isInGFlood(m.pos)) {
           return i;
+        }
+      }
+      return -1;
+    }
+
+    int indexOfMechFire(int turnN) {
+      for (int y = gFlood.yLimits.first; y <= gFlood.yLimits.second; y += 1) {
+        const auto& state = map[y][gFlood.x].mech;
+        if (state.turnN <= turnN) {
+          return state.mechI;
+        }
+      }
+      for (int x = gFlood.xLimits.first; x <= gFlood.xLimits.second; x += 1) {
+        const auto& state = map[gFlood.y][x].mech;
+        if (state.turnN <= turnN) {
+          return state.mechI;
         }
       }
       return -1;
@@ -365,17 +368,24 @@ class Tokyo {
           if (!isPosValid(nc)) {
             continue;
           }
-          auto prevStep = steps[c];
-          if (steps.find(nc) != steps.end()) {
-            steps[nc] = MechState(prevStep.mechI, prevStep.turnN + 1, c);
+          auto& prevStep = steps[c];
+          auto state = MechState(prevStep.mechI, prevStep.turnN + 1, c);
+          if (steps.find(nc) == steps.end()) {
+            steps[nc] = state;
+            q.push(nc);
           } else {
-            auto& step = steps[nc];
-            if (step.turnN < prevStep.turnN + 1) {
-
+            auto& currStep = steps[nc];
+            if (currStep.turnN > state.turnN) {
+              steps[nc] = state;
             }
           }
-          // steps[nc] = MechState(prevStep[i])
         }
+
+        q.pop();
+      }
+
+      for (auto& [pos, state] : steps) {
+        map[pos.y][pos.x].mech = state;
       }
     }
 
@@ -411,12 +421,37 @@ class Tokyo {
     }
     #endif
 
+    int predict() {
+      refreshGodzFlood(true);
+      refreshGodzNext();
+
+      refreshMechsState();
+      
+      int i = 1;
+      while (nextGPos) {
+        const auto newPos = updateGPos();
+        refreshGodzFlood();
+        #ifdef _DEBUG
+        std::cout << std::endl;
+        _printMap();
+        #endif
+
+        if (indexOfMechFire(i) >= 0) {
+          break;
+        }
+        refreshGodzNext();
+        
+        i += 1;
+      }
+      return destroyedCount;
+    }
+
     int simulate() {
       refreshGodzFlood(true);
       refreshGodzNext();
 
       while (true) {
-        auto newPos = updateGPos();
+        const auto newPos = updateGPos();
 
         if (newPos) {
           refreshGodzFlood();
@@ -443,6 +478,19 @@ class Tokyo {
     }
 
   private:
+    std::vector<std::vector<Cell>> map;
+    const int width;
+    const int height;
+
+    Coords gPos;
+    /**
+     * Readonly vector of mutable objects.
+     */
+    std::vector<Mech> mechs;
+    Flood gFlood;
+    Coords nextGPos = Coords::none;
+    int destroyedCount = 0;
+
     Tokyo(std::vector<std::vector<Cell>> map, int width, int height, Coords gPos, std::vector<Mech> mechs)
       : map(map), width(width), height(height),
         gPos(gPos), mechs(mechs),
@@ -460,7 +508,7 @@ int main() {
   ins >> t;
   for (int _ = 0; _ < t; _ += 1) {
     auto tokyo = Tokyo::decode(ins);
-    int destroyedCount = tokyo->simulate();
+    int destroyedCount = tokyo->predict();
     outs << destroyedCount << std::endl;
   }
 }
