@@ -204,10 +204,10 @@ class Tokyo:
             new_pos = self.update_gpos()
 
             if new_pos:
+                self.refresh_godz_flood()
                 if self.index_of_mech_fire() >= 0:
                     return self.destroyed_count
 
-                self.refresh_godz_flood()
                 self.refresh_godz_next()
 
             self.refresh_mech_paths()

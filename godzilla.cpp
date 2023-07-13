@@ -6,10 +6,10 @@
 #include <functional>
 #include <limits>
 #include <climits>
-#include <sstream>
+#include <memory>
 
 #ifdef _DEBUG
-#include <set>
+#include <unordered_set>
 #endif
 
 #define EACH_I(array, i) int i = 0; i < sizeof(array) / sizeof(array[0]); i += 1
@@ -23,23 +23,23 @@ enum class CellKind : uint8_t {
   Destroyed
 };
 
-// FIXME: char readonly enum
+// TODO: char readonly enum
 const char CellTypeEmpty = '.'; 
 const char CellTypeResidential = 'R';
 const char CellTypeDestroyed = 'X';
 const char CellTypeGodzilla = 'G';
 const char CellTypeMech = 'M';
 
-// FIXME: readonly bi-directional map (cannot use boost)
+// TODO: readonly bi-directional map (cannot use boost)
 using CellKindNameMap = unordered_map<CellKind, const char>;
 CellKindNameMap CellKindName;
 CellKindNameMap* initCellKindName(CellKindNameMap* m) {
   m->insert({ CellKind::Empty, CellTypeEmpty });
-  m->insert({ CellKind::Residential, CellTypeDestroyed });
+  m->insert({ CellKind::Residential, CellTypeResidential });
   m->insert({ CellKind::Destroyed, CellTypeDestroyed });
   return m;
 }
-const CellKind inline getCellKindOrEmpty(const char ch) {
+const CellKind getCellKindOrEmpty(const char ch) {
   for (auto p : CellKindName) {
     if (p.second == ch) {
       return p.first;
@@ -58,34 +58,45 @@ struct Cell {
   CellKind kind;
   GodzillaState godz;
 
+  Cell() : kind(CellKind::Empty), godz(GodzillaState::Untouched) {}
   Cell(CellKind kind, GodzillaState godz) : kind(kind), godz(godz) {}
+  Cell(const Cell& other) : kind(other.kind), godz(other.godz) {}
 };
 
 const int CoordsMax = 1e6;
 
-// TODO: is immutable enough?
+// TODO: is immutable only possible through private members & public getter functions? If const, assignment is broken 
 struct Coords {
   static const Coords none;
 
-  const int y;
-  const int x;
+  int y;
+  int x;
 
+  Coords() : y(INT_MIN), x(INT_MIN) {}
   Coords(int y, int x) : y(y), x(x) {}
+  Coords(const Coords& other) : y(other.y), x(other.x) {}
 
-  Coords operator+(const Coords &other) const {
+  Coords operator+(const Coords& other) const {
     return Coords(y + other.y, x + other.x);
   }
 
-  bool operator=(const Coords &other) const {
+  bool operator==(const Coords& other) const {
     return y == other.y && x == other.x;
   }
 
   operator bool() const {
-    return y != INT_MIN || x != INT_MAX;
+    return y != INT_MIN || x != INT_MIN;
   }
-};
-const Coords Coords::none = Coords(INT_MIN, INT_MIN);
 
+  #ifdef _DEBUG
+  operator string() const {
+    return "(" + to_string(y) + ", " + to_string(x) + ")";
+  }
+  #endif
+};
+const Coords Coords::none = Coords();
+
+template<>
 struct std::hash<Coords> {
   size_t operator()(const Coords& p) const {
     return p.y * CoordsMax + p.x;
@@ -97,7 +108,8 @@ struct Mech {
   stack<Coords> path;
   Coords goal;
 
-  Mech(Coords pos) : pos(pos), path(stack<Coords>()), goal(pos) {}
+  Mech(const Coords& pos) : pos(pos), path(stack<Coords>()), goal(pos) {}
+  Mech(const Mech& other) : pos(other.pos), path(other.path), goal(other.goal) {}
 };
 
 struct Flood : Coords {
@@ -105,6 +117,7 @@ struct Flood : Coords {
   pair<int, int> yLimits;
 
   Flood(int y, pair<int, int> xLimits, int x, pair<int, int> yLimits) : Coords(y, x), xLimits(xLimits), yLimits(yLimits) {}
+  Flood(const Flood& other) : Coords(other), xLimits(other.xLimits), yLimits(other.yLimits) {}
 };
 
 /**
@@ -114,7 +127,9 @@ class Tokyo {
   public:
     static const Coords directions[];
 
-    // FIXME: more elegant way to have an array?
+    /**
+     * Vector is not used because width & height are present.
+     */
     Cell** map;
     const int width;
     const int height;
@@ -127,23 +142,22 @@ class Tokyo {
     vector<Mech>* mechs;
     Flood gFlood;
     Coords nextGPos;
-    int destroyedCount;
+    int destroyedCount = 0;
 
     /**
      * Return value requires delete.
      * Input stream is not being closed in the function.
-     * FIXME: return object without consequent `delete` requirement.
-     * FIXME: is it the best to include readonly string_view as apposed to char*.
+     * FIXME: return std::unique_ptr<Tokyo> without consequent `delete` requirement.
      */
-    static Tokyo* decode(istream& input) {
+    static unique_ptr<Tokyo> decode(istream& input) {
       int width, height;
       input >> width >> height;
 
-      auto map = new Cell**[height];
+      auto map = new Cell*[height];
       Coords gPos = Coords::none;
       auto mechs = new vector<Mech>();
       for (int y = 0; y < height; y += 1) {
-        auto row = new Cell*[width];
+        auto row = new Cell[width];
         for (int x = 0; x < width; x += 1) {
           char c;
           input >> c;
@@ -160,21 +174,21 @@ class Tokyo {
               break;
             }
           }
-          auto cell = new Cell(kind, godz);
+          auto cell = Cell(kind, godz);
           row[x] = cell;
         }
         map[y] = row;
         input.ignore(numeric_limits<streamsize>::max(), '\n');
       }
-      return new Tokyo(*map, width, height, gPos, mechs);
+      return unique_ptr<Tokyo>(new Tokyo(map, width, height, gPos, mechs));
     }
 
     bool isPosValid(Coords p) {
       return isPosValid(p.y, p.x);
     }
 
-    bool inline isPosValid(int y, int x) {
-      return 0 <= y < height && 0 <= x < width;
+    bool isPosValid(int y, int x) {
+      return 0 <= y && y < height && 0 <= x && x < width;
     }
 
     /**
@@ -191,8 +205,8 @@ class Tokyo {
       if (!nextGPos) {
         return Coords::none;
       }
-      auto cell = map[gPos.y][gPos.x];
-      auto nextCell = map[nextGPos.y][nextGPos.x];
+      Cell& cell = map[gPos.y][gPos.x];
+      Cell& nextCell = map[nextGPos.y][nextGPos.x];
       if (nextCell.kind == CellKind::Residential) {
         nextCell.kind = CellKind::Destroyed;
         destroyedCount += 1;
@@ -208,6 +222,8 @@ class Tokyo {
      */
     Flood refreshGodzFlood(bool force = false) {
       Coords b(gFlood.y, gFlood.x);
+      gFlood.y = gPos.y;
+      gFlood.x = gPos.x;
       if (force || gPos.y < b.y || gPos.x != b.x) {
         for (int d = gPos.y - 1; d >= 0; d -= 1) {
           gFlood.yLimits.first = d;
@@ -243,10 +259,10 @@ class Tokyo {
       return gFlood;
     }
 
-    bool inline isInGFlood(Coords p) {
-      auto f = gFlood;
-      return f.x == p.x && f.yLimits.first <= p.y <= f.yLimits.second
-        && f.y == p.y && f.xLimits.first <= p.x <= f.xLimits.second;
+    bool isInGFlood(Coords p) {
+      auto f = gFlood; // WTF: f has garbage
+      return f.x == p.x && f.yLimits.first <= p.y && p.y <= f.yLimits.second
+        || f.y == p.y && f.xLimits.first <= p.x && p.x <= f.xLimits.second;
     }
 
     int indexOfMechFire() {
@@ -262,7 +278,7 @@ class Tokyo {
     void refreshMechPaths();
 
     void updateMechsPos() {
-      for (auto m : *mechs) {
+      for (Mech& m : *mechs) {
         if (m.path.empty()) {
           continue;
         }
@@ -273,7 +289,7 @@ class Tokyo {
 
     #ifdef _DEBUG
     void _printMap() {
-      set<Coords> mechsPos;
+      unordered_set<Coords> mechsPos;
       for (auto m : *mechs) {
         mechsPos.insert(m.pos);
       }
@@ -281,9 +297,9 @@ class Tokyo {
         for (int x = 0; x < width; x += 1) {
           Coords p(y, x);
           if (p == gPos) {
-            cout << 'G';
+            cout << CellTypeGodzilla;
           } else if (mechsPos.find(p) != mechsPos.end()) {
-            cout << 'M';
+            cout << CellTypeMech;
           } else {
             cout << CellKindName[map[y][x].kind];
           }
@@ -301,16 +317,22 @@ class Tokyo {
         auto newPos = updateGPos();
 
         if (newPos) {
+          refreshGodzFlood();
           if (indexOfMechFire() >= 0) {
             return destroyedCount;
           }
 
-          refreshGodzFlood();
           refreshGodzNext();
         }
 
         refreshMechPaths();
         updateMechsPos();
+
+        #ifdef _DEBUG
+        cout << endl;
+        _printMap();
+        #endif
+
         if (indexOfMechFire() >= 0) {
           return destroyedCount;
         }
@@ -334,13 +356,14 @@ class Tokyo {
     }
 
   private:
-    Tokyo(Cell** map, int width, int height, Coords gPos, vector<Mech>* mechs) : map(map), width(width), height(height), gPos(gPos), mechs(mechs), gFlood(gPos.y, { gPos.x, gPos.x }, gPos.x, { gPos.y, gPos.y }), nextGPos(Coords::none) {}
+    Tokyo(Cell** map, int width, int height, Coords gPos, vector<Mech>* mechs)
+      : map(map), width(width), height(height),
+        gPos(gPos), mechs(mechs),
+        gFlood(gPos.y, { gPos.x, gPos.x }, gPos.x, { gPos.y, gPos.y }),
+        nextGPos(Coords::none), destroyedCount(0) {}
 };
 const Coords Tokyo::directions[] = { Coords(-1, 0), Coords(0, 1), Coords(1, 0), Coords(0, -1) };
 
-/**
- * Delete is required.
- */
 Coords Tokyo::getGodzNext() {
   auto firstUntouched = Coords::none;
   Coords o = Coords::none;
@@ -355,7 +378,7 @@ Coords Tokyo::getGodzNext() {
         firstUntouched = p;
       }
       if (cell.kind == CellKind::Residential) {
-        return firstUntouched;
+        return p;
       }
     }
   }
@@ -363,32 +386,33 @@ Coords Tokyo::getGodzNext() {
 }
 
 void Tokyo::refreshMechPaths() {
-  for (auto m : *mechs) {
+  for (Mech& m : *mechs) {
     if (isInGFlood(m.goal)) {
       continue;
     }
     queue<Coords> q({ m.pos });
-    unordered_map<Coords, Coords> steps({ {m.pos, Coords::none} });
+    auto steps = unordered_map<Coords, Coords>({ {m.pos, Coords::none} });
+
     
     Coords last = Coords::none;
     while (!q.empty()) {
       auto c = q.front();
 
-      for (EACH_I(directions, i)) {
+      for (EACH_I(directions, i)) { // WTF: `steps` after this line gets additional element & the elements change on their own
         auto nc = c + directions[i];
-        if (!isPosValid(nc) || steps[nc] || map[nc.y][nc.x].kind == CellKind::Residential) {
+        if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y][nc.x].kind == CellKind::Residential) {
           continue;
         }
         steps[nc] = c;
         if (isInGFlood(nc)) {
           last = nc;
-          break;
+          goto rmp1;
         }
         q.push(nc);
       }
       q.pop();
     }
-    queue<Coords>().swap(q); // clear the queue
+    rmp1: queue<Coords>().swap(q); // clear the queue
 
     if (!last || steps.size() == 1) {
       m.path = stack<Coords>();
@@ -422,6 +446,5 @@ int main() {
     auto tokyo = Tokyo::decode(ins);
     int destroyedCount = tokyo->simulate();
     outs << destroyedCount << endl;
-    delete tokyo;
   }
 }

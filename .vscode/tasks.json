@@ -6,6 +6,8 @@
       "command": "/usr/bin/g++-11",
       "args": [
         "-fdiagnostics-color=always",
+        "-D",
+        "_DEBUG",
         "-g",
         "godzilla.cpp",
         "-o",
