@@ -53,7 +53,7 @@ enum class GodzillaStatus : uint8_t {
 
 const int CoordsMax = 1e6;
 
-// FIXME: add getters as `const type& get() const { ... }`
+// FIXME: for making shallow readonly object, add getters as `const type& getValue() const { ... }`
 struct Coords {
   static const Coords none;
 
@@ -106,11 +106,15 @@ struct MechState {
   //   return !isUninit();
   // }
 
-  MechState() {}
-  MechState(int mechI, int turnN, const Coords& from) : mechI(mechI), turnN(turnN), from(from) {}
+  // MechState() {}
+  MechState(int mechI) : MechState(mechI, 0, Coords::none) {}
   MechState(const MechState& other) : mechI(other.mechI), turnN(other.turnN), from(other.from) {}
+  MechState(const MechState& other, const Coords& from) : mechI(other.mechI), turnN(other.turnN + 1), from(from) {}
+
+  private:
+    MechState(int mechI, int turnN, const Coords& from) : mechI(mechI), turnN(turnN), from(from) {}
 };
-const MechState MechState::none = MechState();
+const MechState MechState::none = MechState(-1, -1, Coords::none);
 
 struct Cell {
   CellKind kind = CellKind::Empty;
@@ -124,11 +128,11 @@ struct Cell {
 
 struct Mech {
   Coords pos;
-  std::stack<Coords> path = std::stack<Coords>();
-  Coords goal = Coords::none;
+  // std::stack<Coords> path = std::stack<Coords>();
+  // Coords goal = Coords::none;
 
-  Mech(const Coords& pos) : pos(pos), goal(pos) {}
-  Mech(const Mech& other) : pos(other.pos), path(other.path), goal(other.goal) {}
+  Mech(const Coords& pos) : pos(pos), /*goal(pos)*/ {}
+  Mech(const Mech& other) : pos(other.pos), /*path(other.path), goal(other.goal)*/ {}
 };
 
 struct Flood : Coords {
@@ -215,8 +219,7 @@ class Tokyo {
 
     Coords getGodzNext() const {
       auto firstUntouched = Coords::none;
-      Coords o = Coords::none;
-      for (const auto d : directions) {
+      for (const auto& d : directions) {
         auto p = gPos + d;
         if (!isPosValid(p)) {
           continue;
@@ -376,13 +379,13 @@ class Tokyo {
       for (int i = 0; i < mechs.size(); i += 1) {
         const auto& m = mechs[i];
         mechQueue.push(m.pos);
-        map[m.pos.y][m.pos.x].mech = MechState(i, 0, Coords::none);
+        map[m.pos.y][m.pos.x].mech = MechState(i);
       }
       return true;
     }
 
     void tryAddSurrounding(const Coords& c) {
-      const auto& cell = map[c.y][c.x];
+      auto& cell = map[c.y][c.x];
       if (cell.kind == CellKind::Residential) {
         return;
       }
@@ -391,8 +394,10 @@ class Tokyo {
         if (!isPosValid(nc)) {
           continue;
         }
-        if (!map[nc.y][nc.x].mech.isUninit()) {
+        const auto& prev = map[nc.y][nc.x].mech;
+        if (!prev.isUninit()) {
           mechQueue.push(c);
+          cell.mech = MechState(prev, c);
           return;
         }
       }
@@ -412,7 +417,7 @@ class Tokyo {
           if (!isPosValid(nc) || currCell.kind == CellKind::Residential) {
             continue;
           }
-          auto state = MechState(prevCell.mech.mechI, prevCell.mech.turnN + 1, c);
+          auto state = MechState(prevCell.mech, c);
           if (currCell.mech.isUninit()) {
             currCell.mech = state;
             mechQueue.push(nc);
@@ -469,7 +474,7 @@ class Tokyo {
         for (int x = 0; x < width; x += 1) {
           const auto& m = map[y][x].mech;
           if (m.turnN >= 0) {
-            std::cout << m.turnN;
+            std::cout << m.turnN % 10;
           } else {
             if (Coords(y, x) == gPos) {
               std::cout << (char)CellType::Godzilla;
