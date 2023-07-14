@@ -119,7 +119,7 @@ struct Cell {
 
   Cell() {}
   Cell(CellKind kind, GodzillaStatus godz, const MechState& mech = MechState::none) : kind(kind), godz(godz), mech(mech) {}
-  Cell(const Cell& other) : kind(other.kind), godz(other.godz), mech(mech) {}
+  Cell(const Cell& other) : kind(other.kind), godz(other.godz), mech(other.mech) {}
 };
 
 struct Mech {
@@ -140,7 +140,7 @@ struct Flood : Coords {
 };
 
 class Tokyo {
-  Cell** map;
+  std::vector<std::vector<Cell>> map;
   const int width;
   const int height;
 
@@ -155,7 +155,7 @@ class Tokyo {
   Coords nextGPos = Coords::none;
   int destroyedCount = 0;
 
-  Tokyo(Cell** map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
+  Tokyo(const std::vector<std::vector<Cell>>& map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
     : map(map), width(width), height(height),
       gPos(gPos), mechs(mechs),
       gFlood(gPos.y, { gPos.x, gPos.x }, gPos.x, { gPos.y, gPos.y }) {}
@@ -170,11 +170,11 @@ class Tokyo {
       int width, height;
       input >> width >> height;
 
-      auto map = new Cell*[height];
+      auto map = std::vector<std::vector<Cell>>(height);
       Coords gPos = Coords::none;
       auto mechs = std::vector<Mech>();
       for (int y = 0; y < height; y += 1) {
-        auto row = new Cell[width];
+        auto row = std::vector<Cell>(width);
         for (int x = 0; x < width; x += 1) {
           char c;
           input >> c;
@@ -198,16 +198,6 @@ class Tokyo {
         input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
       return std::unique_ptr<Tokyo>(new Tokyo(map, width, height, gPos, mechs));
-    }
-
-    ~Tokyo() {
-      if (map && height > 0) {
-        for (int i = 0; i < height; i += 1) {
-          delete[] map[i];
-        }
-        delete[] map;
-        map = nullptr;
-      }
     }
 
     bool isPosValid(const Coords& p) const {
@@ -412,7 +402,7 @@ class Tokyo {
       while (!mechQueue.empty()) {
         const auto& c = mechQueue.front();
         const auto& prevCell = map[c.y][c.x];
-        if (prevCell.mech.turnN >= maxTurn) {// TODO: try break;
+        if (prevCell.mech.turnN >= maxTurn) {
           break;
         }
 
