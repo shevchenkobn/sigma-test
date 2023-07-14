@@ -200,6 +200,16 @@ class Tokyo {
       return std::unique_ptr<Tokyo>(new Tokyo(map, width, height, gPos, mechs));
     }
 
+    ~Tokyo() {
+      if (map && height > 0) {
+        for (int i = 0; i < height; i += 1) {
+          delete[] map[i];
+        }
+        delete[] map;
+        map = nullptr;
+      }
+    }
+
     bool isPosValid(const Coords& p) const {
       return isPosValid(p.y, p.x);
     }
@@ -298,15 +308,15 @@ class Tokyo {
         || f.y == p.y && f.xLimits.first <= p.x && p.x <= f.xLimits.second;
     }
 
-    int indexOfMechFire() const {
-      for (int i = 0; i < mechs.size(); i += 1) {
-        const auto& m = mechs[i];
-        if (isInGFlood(m.pos)) {
-          return i;
-        }
-      }
-      return -1;
-    }
+    // int indexOfMechFire() const {
+    //   for (int i = 0; i < mechs.size(); i += 1) {
+    //     const auto& m = mechs[i];
+    //     if (isInGFlood(m.pos)) {
+    //       return i;
+    //     }
+    //   }
+    //   return -1;
+    // }
 
     int indexOfMechFire(int turnN) const {
       for (int y = gFlood.yLimits.first; y <= gFlood.yLimits.second; y += 1) {
@@ -324,54 +334,50 @@ class Tokyo {
       return -1;
     }
 
-    void refreshMechPaths() {
-      for (auto& m : mechs) {
-        if (isInGFlood(m.goal)) {
-          continue;
-        }
-        std::queue<Coords> q({ m.pos });
-        auto steps = std::unordered_map<Coords, Coords>({ {m.pos, Coords::none} });
-
-        
-        Coords last = Coords::none;
-        while (!q.empty()) {
-          auto c = q.front();
-
-          for (const auto& d : directions) {
-            auto nc = c + d;
-            if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y][nc.x].kind == CellKind::Residential) {
-              continue;
-            }
-            steps[nc] = c;
-            if (isInGFlood(nc)) {
-              last = nc;
-              goto rmp1;
-            }
-            q.push(nc);
-          }
-          q.pop();
-        }
-        rmp1: std::queue<Coords>().swap(q); // clear the queue
-
-        if (!last || steps.size() == 1) {
-          m.path = std::stack<Coords>();
-          continue;
-        }
-        auto path = std::stack<Coords>();
-        auto curr = last;
-        while (curr) {
-          auto prev = steps[curr];
-          if (prev) {
-            path.push(curr);
-            curr = prev;
-          } else {
-            break;
-          }
-        }
-        m.path = path;
-        m.goal = last;
-      }
-    }
+    // void refreshMechPaths() {
+    //   for (auto& m : mechs) {
+    //     if (isInGFlood(m.goal)) {
+    //       continue;
+    //     }
+    //     std::queue<Coords> q({ m.pos });
+    //     auto steps = std::unordered_map<Coords, Coords>({ {m.pos, Coords::none} });
+    //     Coords last = Coords::none;
+    //     while (!q.empty()) {
+    //       auto c = q.front();
+    //       for (const auto& d : directions) {
+    //         auto nc = c + d;
+    //         if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y][nc.x].kind == CellKind::Residential) {
+    //           continue;
+    //         }
+    //         steps[nc] = c;
+    //         if (isInGFlood(nc)) {
+    //           last = nc;
+    //           goto rmp1;
+    //         }
+    //         q.push(nc);
+    //       }
+    //       q.pop();
+    //     }
+    //     rmp1: std::queue<Coords>().swap(q); // clear the queue
+    //     if (!last || steps.size() == 1) {
+    //       m.path = std::stack<Coords>();
+    //       continue;
+    //     }
+    //     auto path = std::stack<Coords>();
+    //     auto curr = last;
+    //     while (curr) {
+    //       auto prev = steps[curr];
+    //       if (prev) {
+    //         path.push(curr);
+    //         curr = prev;
+    //       } else {
+    //         break;
+    //       }
+    //     }
+    //     m.path = path;
+    //     m.goal = last;
+    //   }
+    // }
 
     bool tryInitMechsQueue() {
       if (!mechQueue.empty()) {
@@ -429,15 +435,15 @@ class Tokyo {
       }
     }
 
-    void updateMechsPos() {
-      for (auto& m : mechs) {
-        if (m.path.empty()) {
-          continue;
-        }
-        m.pos = m.path.top();
-        m.path.pop();
-      }
-    }
+    // void updateMechsPos() {
+    //   for (auto& m : mechs) {
+    //     if (m.path.empty()) {
+    //       continue;
+    //     }
+    //     m.pos = m.path.top();
+    //     m.path.pop();
+    //   }
+    // }
 
     #ifdef _DEBUG
     void _printMap(bool topMargin = true) const {
@@ -487,7 +493,7 @@ class Tokyo {
     }
     #endif
 
-    int predict() {
+    int simulate() {
       refreshGodzFlood(true);
       refreshGodzNext();
 
@@ -521,26 +527,20 @@ class Tokyo {
     // int simulate() {
     //   refreshGodzFlood(true);
     //   refreshGodzNext();
-
     //   while (true) {
     //     const auto newPos = updateGPos();
-
     //     if (newPos) {
     //       refreshGodzFlood();
     //       if (indexOfMechFire() >= 0) {
     //         return destroyedCount;
     //       }
-
     //       refreshGodzNext();
     //     }
-
     //     refreshMechPaths();
     //     updateMechsPos();
-
     //     #ifdef _DEBUG
     //     _printMap();
     //     #endif
-
     //     if (indexOfMechFire() >= 0) {
     //       return destroyedCount;
     //     }
@@ -560,7 +560,7 @@ int main() {
   ins >> t;
   for (int _ = 0; _ < t; _ += 1) {
     auto tokyo = Tokyo::decode(ins);
-    int destroyedCount = tokyo->predict();
+    int destroyedCount = tokyo->simulate();
     outs << destroyedCount << std::endl;
   }
 }
