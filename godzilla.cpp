@@ -73,7 +73,7 @@ struct Coords {
   }
 
   operator bool() const {
-    return this->operator==(Coords::none);
+    return !this->operator==(Coords::none);
   }
 
   #ifdef _DEBUG
@@ -140,7 +140,7 @@ struct Flood : Coords {
 };
 
 class Tokyo {
-  std::vector<std::vector<Cell>> map;
+  Cell** map;
   const int width;
   const int height;
 
@@ -149,12 +149,13 @@ class Tokyo {
    * Readonly vector of mutable objects.
    */
   std::vector<Mech> mechs;
-  // std::queue<Coords> mechQueue;
   Flood gFlood;
+  int currTurn = 0;
+  std::queue<Coords> mechQueue = {};
   Coords nextGPos = Coords::none;
   int destroyedCount = 0;
 
-  Tokyo(const std::vector<std::vector<Cell>>& map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
+  Tokyo(Cell** map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
     : map(map), width(width), height(height),
       gPos(gPos), mechs(mechs),
       gFlood(gPos.y, { gPos.x, gPos.x }, gPos.x, { gPos.y, gPos.y }) {}
@@ -169,11 +170,11 @@ class Tokyo {
       int width, height;
       input >> width >> height;
 
-      auto map = std::vector<std::vector<Cell>>(height);
+      auto map = new Cell*[height];
       Coords gPos = Coords::none;
       auto mechs = std::vector<Mech>();
       for (int y = 0; y < height; y += 1) {
-        map[y] = std::vector<Cell>(width);
+        auto row = new Cell[width];
         for (int x = 0; x < width; x += 1) {
           char c;
           input >> c;
@@ -191,8 +192,9 @@ class Tokyo {
             }
           }
           auto cell = Cell(kind, godz);
-          map[y][x] = cell;
+          row[x] = cell;
         }
+        map[y] = row;
         input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
       return std::unique_ptr<Tokyo>(new Tokyo(map, width, height, gPos, mechs));
@@ -309,13 +311,13 @@ class Tokyo {
     int indexOfMechFire(int turnN) const {
       for (int y = gFlood.yLimits.first; y <= gFlood.yLimits.second; y += 1) {
         const auto& state = map[y][gFlood.x].mech;
-        if (state.turnN <= turnN) {
+        if (!state.isUninit() && state.turnN <= turnN) {
           return state.mechI;
         }
       }
       for (int x = gFlood.xLimits.first; x <= gFlood.xLimits.second; x += 1) {
         const auto& state = map[gFlood.y][x].mech;
-        if (state.turnN <= turnN) {
+        if (!state.isUninit() && state.turnN <= turnN) {
           return state.mechI;
         }
       }
@@ -371,43 +373,60 @@ class Tokyo {
       }
     }
 
-    void refreshMechsState() {
-      std::queue<Coords> q;
+    bool tryInitMechsQueue() {
+      if (!mechQueue.empty()) {
+        return false;
+      }
       for (int i = 0; i < mechs.size(); i += 1) {
         const auto& m = mechs[i];
-        q.push(m.pos);
+        mechQueue.push(m.pos);
         map[m.pos.y][m.pos.x].mech = MechState(i, 0, Coords::none);
       }
+      return true;
+    }
 
-      while (!q.empty()) {
-        const auto& c = q.front();
+    void tryAddSurrounding(const Coords& c) {
+      const auto& cell = map[c.y][c.x];
+      if (cell.kind == CellKind::Residential) {
+        return;
+      }
+      for (const auto& d : directions) {
+        const auto& nc = c + d;
+        if (!isPosValid(nc)) {
+          continue;
+        }
+        if (!map[nc.y][nc.x].mech.isUninit()) {
+          mechQueue.push(c);
+          return;
+        }
+      }
+    }
 
-        for (const auto d : directions) {
+    void refreshMechsState(int maxTurn) {
+      while (!mechQueue.empty()) {
+        const auto& c = mechQueue.front();
+        const auto& prevCell = map[c.y][c.x];
+        if (prevCell.mech.turnN >= maxTurn) {// TODO: try break;
+          break;
+        }
+
+        for (const auto& d : directions) {
           const auto nc = c + d;
-          if (!isPosValid(nc)) {
+          auto& currCell = map[nc.y][nc.x];
+          if (!isPosValid(nc) || currCell.kind == CellKind::Residential) {
             continue;
           }
-          const auto& prevCell = map[c.y][c.x];
-          auto& currCell = map[nc.y][nc.x];
           auto state = MechState(prevCell.mech.mechI, prevCell.mech.turnN + 1, c);
           if (currCell.mech.isUninit()) {
             currCell.mech = state;
-            q.push(nc);
+            mechQueue.push(nc);
           } else if (currCell.mech.turnN > state.turnN) {
             currCell.mech = state;
           }
         }
 
-        q.pop();
+        mechQueue.pop();
       }
-
-      #ifdef _DEBUG
-      _printMechMap();
-      #endif
-
-      // for (auto& [pos, state] : steps) {
-      //   map[pos.y][pos.x].mech = state;
-      // }
     }
 
     void updateMechsPos() {
@@ -452,7 +471,16 @@ class Tokyo {
 
       for (int y = 0; y < height; y += 1) {
         for (int x = 0; x < width; x += 1) {
-          std::cout << map[y][x].mech.turnN;
+          const auto& m = map[y][x].mech;
+          if (m.turnN >= 0) {
+            std::cout << m.turnN;
+          } else {
+            if (Coords(y, x) == gPos) {
+              std::cout << (char)CellType::Godzilla;
+            } else {
+              std::cout << (char)CellKindName[map[y][x].kind];
+            }
+          }
         }
         std::cout << std::endl;
       }
@@ -463,56 +491,62 @@ class Tokyo {
       refreshGodzFlood(true);
       refreshGodzNext();
 
-      refreshMechsState();
+      tryInitMechsQueue();
       
-      int i = 1;
+      currTurn = 1;
       while (nextGPos) {
+        auto gPosIsResidential = nextGPos && map[nextGPos.y][nextGPos.x].kind == CellKind::Residential;
+
         const auto newPos = updateGPos();
         refreshGodzFlood();
+
+        if (gPosIsResidential) {
+          tryAddSurrounding(newPos);
+        }
+        refreshMechsState(currTurn);
         #ifdef _DEBUG
-        _printMap();
+        _printMechMap();
         #endif
 
-        if (indexOfMechFire(i) >= 0) {
+        if (indexOfMechFire(currTurn) >= 0) {
           break;
         }
         refreshGodzNext();
         
-        i += 1;
+        currTurn += 1;
       }
       return destroyedCount;
     }
 
-    int simulate() {
-      refreshGodzFlood(true);
-      refreshGodzNext();
+    // int simulate() {
+    //   refreshGodzFlood(true);
+    //   refreshGodzNext();
 
-      while (true) {
-        const auto newPos = updateGPos();
+    //   while (true) {
+    //     const auto newPos = updateGPos();
 
-        if (newPos) {
-          refreshGodzFlood();
-          if (indexOfMechFire() >= 0) {
-            return destroyedCount;
-          }
+    //     if (newPos) {
+    //       refreshGodzFlood();
+    //       if (indexOfMechFire() >= 0) {
+    //         return destroyedCount;
+    //       }
 
-          refreshGodzNext();
-        }
+    //       refreshGodzNext();
+    //     }
 
-        refreshMechPaths();
-        updateMechsPos();
+    //     refreshMechPaths();
+    //     updateMechsPos();
 
-        #ifdef _DEBUG
-        std::cout << std::endl;
-        _printMap();
-        #endif
+    //     #ifdef _DEBUG
+    //     _printMap();
+    //     #endif
 
-        if (indexOfMechFire() >= 0) {
-          return destroyedCount;
-        }
-      }
-      return destroyedCount;
-    }
+    //     if (indexOfMechFire() >= 0) {
+    //       return destroyedCount;
+    //     }
+    //   }
+    //   return destroyedCount;
+    // }
 };
 const std::vector<Coords> Tokyo::directions = { Coords(-1, 0), Coords(0, 1), Coords(1, 0), Coords(0, -1) };
 
