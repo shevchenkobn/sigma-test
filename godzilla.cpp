@@ -13,13 +13,13 @@
 #endif
 
 
-enum class CellKind : uint8_t {
+enum class CellKind : const uint8_t {
   Empty = 0,
   Residential,
   Destroyed
 };
 
-enum class CellType : const char {
+enum class CellName : const char {
   Empty = '.',
   Residential = 'R',
   Destroyed = 'X',
@@ -27,92 +27,135 @@ enum class CellType : const char {
   Mech = 'M'
 };
 
-// FIXME: better create a class with 2 `const unordered_map&`
-using CellKindNameMap = std::unordered_map<CellKind, CellType>;
-CellKindNameMap CellKindName;
-const CellKindNameMap& initCellKindName(CellKindNameMap& m) {
-  m[CellKind::Empty] = CellType::Empty;
-  m[CellKind::Residential] = CellType::Residential;
-  m[CellKind::Destroyed] = CellType::Destroyed;
-  return m;
-}
-const CellKind getCellKindOrEmpty(const char ch) {
-  for (auto p : CellKindName) {
-    if (ch == (char)p.second) {
-      return p.first;
+class CellKindName {
+  private:
+    static const std::unordered_map<CellKind, CellName> toName;
+  public:
+    static const CellName name(CellKind kind) {
+      return toName.at(kind);
     }
-  }
-  return CellKind::Empty;
-}
 
-enum class GodzillaStatus : uint8_t {
+    static const CellKind kindOrEmpty(const char name) {
+      for (auto p : toName) {
+        if (name == (char)p.second) {
+          return p.first;
+        }
+      }
+      return CellKind::Empty;
+    }
+};
+const std::unordered_map<CellKind, CellName> CellKindName::toName = {
+  {CellKind::Empty, CellName::Empty},
+  {CellKind::Residential, CellName::Residential},
+  {CellKind::Destroyed, CellName::Destroyed},
+};
+
+enum class GodzillaStatus : const uint8_t {
   Untouched = 0,
   Current,
   Visited
 };
 
-const int CoordsMax = 1e6;
-
-// FIXME: for making shallow readonly object, add getters as `const type& getValue() const { ... }`
+/**
+ * Mutable.
+ */
 struct Coords {
-  static const Coords none;
+  private:
+    int16_t y_ = INT16_MIN;
+    int16_t x_ = INT16_MIN;
 
-  int y = INT_MIN;
-  int x = INT_MIN;
+  public:
+    /**
+     * According to problem definition, the x & y cannot be larger than 1000.
+     */
+    static const short maxXY;
+    static const Coords none;
 
-  Coords() {}
-  Coords(int y, int x) : y(y), x(x) {}
-  Coords(const Coords& other) : y(other.y), x(other.x) {}
+    Coords(int16_t y, int16_t x) : y_(y), x_(x) {}
 
-  Coords operator+(const Coords& other) const {
-    return Coords(y + other.y, x + other.x);
-  }
+    Coords() = default;
+    Coords(const Coords& other) = default;
+    Coords& operator=(const Coords& other) = default;
+    bool operator==(const Coords& other) const = default;
 
-  bool operator==(const Coords& other) const {
-    return y == other.y && x == other.x;
-  }
+    int16_t x() const {
+      return x_;
+    }
 
-  operator bool() const {
-    return !this->operator==(Coords::none);
-  }
+    int16_t x(const int16_t x) {
+      return x_ = x;
+    }
 
-  #ifdef _DEBUG
-  operator std::string() const {
-    return "(" + std::to_string(y) + ", " + std::to_string(x) + ")";
-  }
-  #endif
+    int16_t y() const {
+      return y_;
+    }
+
+    int16_t y(const int16_t y) {
+      return y_ = y;
+    }
+
+    Coords operator+(const Coords& other) const {
+      return Coords(y_ + other.y_, x_ + other.x_);
+    }
+
+    operator bool() const {
+      return !this->operator==(Coords::none);
+    }
+
+    #ifdef _DEBUG
+    operator std::string() const {
+      return "(" + std::to_string(y_) + ", " + std::to_string(x_) + ")";
+    }
+    #endif
 };
+const int16_t Coords::maxXY = 1001;
 const Coords Coords::none = Coords();
 
 template<>
 struct std::hash<Coords> {
   size_t operator()(const Coords& p) const {
-    return p.y * CoordsMax + p.x;
+    return p.y() * Coords::maxXY + p.x();
   }
 };
 
 struct MechState {
-  static const MechState none;
-
-  int mechI = -1;
-  int turnN = -1;
-  Coords from = Coords::none;
-
-  bool isUninit() const {
-    return mechI < 0 && turnN < 0;
-  }
-
-  // operator bool() const {
-  //   return !isUninit();
-  // }
-
-  // MechState() {}
-  MechState(int mechI) : MechState(mechI, 0, Coords::none) {}
-  MechState(const MechState& other) : mechI(other.mechI), turnN(other.turnN), from(other.from) {}
-  MechState(const MechState& other, const Coords& from) : mechI(other.mechI), turnN(other.turnN + 1), from(from) {}
-
   private:
-    MechState(int mechI, int turnN, const Coords& from) : mechI(mechI), turnN(turnN), from(from) {}
+    int8_t mechI_ = -1;
+    int32_t turnN_ = -1;
+    Coords from_ = Coords::none;
+
+    MechState(int8_t mechI, int32_t turnN, const Coords& from) : mechI_(mechI), turnN_(turnN), from_(from) {}
+  
+  public:
+    static const MechState none;
+
+    int8_t mechI() const {
+      return mechI_;
+    }
+
+    int32_t turnN() const {
+      return turnN_;
+    }
+
+    Coords from() const {
+      return from_;
+    }
+
+    MechState() = default;
+    MechState(const MechState& other) = default;
+    MechState& operator=(const MechState& other) = default;
+    bool operator==(const MechState& other) = delete;
+
+    MechState(int8_t mechI) : MechState(mechI, 0, Coords::none) {}
+    MechState(const MechState& other, const Coords& from) : mechI_(other.mechI_), turnN_(other.turnN_ + 1), from_(from) {}
+
+    bool isEmpty() const {
+      return mechI_ < 0 && turnN_ < 0;
+    }
+
+    operator bool() const {
+      return !isEmpty();
+    }
 };
 const MechState MechState::none = MechState(-1, -1, Coords::none);
 
@@ -131,8 +174,8 @@ struct Mech {
   // std::stack<Coords> path = std::stack<Coords>();
   // Coords goal = Coords::none;
 
-  Mech(const Coords& pos) : pos(pos), /*goal(pos)*/ {}
-  Mech(const Mech& other) : pos(other.pos), /*path(other.path), goal(other.goal)*/ {}
+  Mech(const Coords& pos) : pos(pos) /*goal(pos)*/ {}
+  Mech(const Mech& other) : pos(other.pos) /*path(other.path), goal(other.goal)*/ {}
 };
 
 struct Flood : Coords {
@@ -162,7 +205,7 @@ class Tokyo {
   Tokyo(const std::vector<std::vector<Cell>>& map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
     : map(map), width(width), height(height),
       gPos(gPos), mechs(mechs),
-      gFlood(gPos.y, { gPos.x, gPos.x }, gPos.x, { gPos.y, gPos.y }) {}
+      gFlood(gPos.y(), { gPos.x(), gPos.x() }, gPos.x(), { gPos.y(), gPos.y() }) {}
   
   public:
     static const std::vector<Coords> directions;
@@ -182,15 +225,15 @@ class Tokyo {
         for (int x = 0; x < width; x += 1) {
           char c;
           input >> c;
-          auto kind = getCellKindOrEmpty(c);
+          auto kind = CellKindName::kindOrEmpty(c);
           auto godz = GodzillaStatus::Untouched;
-          switch ((CellType)c) {
-            case CellType::Godzilla: {
+          switch ((CellName)c) {
+            case CellName::Godzilla: {
               gPos = Coords(y, x);
               godz = GodzillaStatus::Current;
               break;
             }
-            case CellType::Mech: {
+            case CellName::Mech: {
               mechs.push_back(Mech(Coords(y, x)));
               break;
             }
@@ -205,7 +248,7 @@ class Tokyo {
     }
 
     bool isPosValid(const Coords& p) const {
-      return isPosValid(p.y, p.x);
+      return isPosValid(p.y(), p.x());
     }
 
     bool isPosValid(int y, int x) const {
@@ -224,7 +267,7 @@ class Tokyo {
         if (!isPosValid(p)) {
           continue;
         }
-        auto cell = map[p.y][p.x];
+        auto cell = map[p.y()][p.x()];
         if (cell.godz == GodzillaStatus::Untouched) {
           if (!firstUntouched) {
             firstUntouched = p;
@@ -241,8 +284,8 @@ class Tokyo {
       if (!nextGPos) {
         return Coords::none;
       }
-      auto& cell = map[gPos.y][gPos.x];
-      auto& nextCell = map[nextGPos.y][nextGPos.x];
+      auto& cell = map[gPos.y()][gPos.x()];
+      auto& nextCell = map[nextGPos.y()][nextGPos.x()];
       if (nextCell.kind == CellKind::Residential) {
         nextCell.kind = CellKind::Destroyed;
         destroyedCount += 1;
@@ -257,37 +300,37 @@ class Tokyo {
      * If residential cell is found at the boundary, it is included into the flood.
      */
     Flood refreshGodzFlood(bool force = false) {
-      Coords b(gFlood.y, gFlood.x);
-      gFlood.y = gPos.y;
-      gFlood.x = gPos.x;
-      if (force || gPos.y < b.y || gPos.x != b.x) {
-        for (int d = gPos.y - 1; d >= 0; d -= 1) {
+      Coords b(gFlood.y(), gFlood.x());
+      gFlood.y(gPos.y());
+      gFlood.x(gPos.x());
+      if (force || gPos.y() < b.y() || gPos.x() != b.x()) {
+        for (int d = gPos.y() - 1; d >= 0; d -= 1) {
           gFlood.yLimits.first = d;
-          if (map[d][gPos.x].kind == CellKind::Residential) {
+          if (map[d][gPos.x()].kind == CellKind::Residential) {
             break;
           }
         }
       }
-      if (force || gPos.y > b.y || gPos.x != b.x) {
-        for (int d = gPos.y + 1; d < height; d += 1) {
+      if (force || gPos.y() > b.y() || gPos.x() != b.x()) {
+        for (int d = gPos.y() + 1; d < height; d += 1) {
           gFlood.yLimits.second = d;
-          if (map[d][gPos.x].kind == CellKind::Residential) {
+          if (map[d][gPos.x()].kind == CellKind::Residential) {
             break;
           }
         }
       }
-      if (force || gPos.x < b.x || gPos.y != b.y) {
-        for (int d = gPos.x - 1; d >= 0; d -= 1) {
+      if (force || gPos.x() < b.x() || gPos.y() != b.y()) {
+        for (int d = gPos.x() - 1; d >= 0; d -= 1) {
           gFlood.xLimits.first = d;
-          if (map[gPos.y][d].kind == CellKind::Residential) {
+          if (map[gPos.y()][d].kind == CellKind::Residential) {
             break;
           }
         }
       }
-      if (force || gPos.x > b.x || gPos.y != b.y) {
-        for (int d = gPos.x + 1; d < width; d += 1) {
+      if (force || gPos.x() > b.x() || gPos.y() != b.y()) {
+        for (int d = gPos.x() + 1; d < width; d += 1) {
           gFlood.xLimits.second = d;
-          if (map[gPos.y][d].kind == CellKind::Residential) {
+          if (map[gPos.y()][d].kind == CellKind::Residential) {
             break;
           }
         }
@@ -297,8 +340,8 @@ class Tokyo {
 
     bool isInGFlood(const Coords& p) const {
       const auto& f = gFlood;
-      return f.x == p.x && f.yLimits.first <= p.y && p.y <= f.yLimits.second
-        || f.y == p.y && f.xLimits.first <= p.x && p.x <= f.xLimits.second;
+      return (f.x() == p.x() && f.yLimits.first <= p.y() && p.y() <= f.yLimits.second)
+        || (f.y() == p.y() && f.xLimits.first <= p.x() && p.x() <= f.xLimits.second);
     }
 
     // int indexOfMechFire() const {
@@ -313,15 +356,15 @@ class Tokyo {
 
     int indexOfMechFire(int turnN) const {
       for (int y = gFlood.yLimits.first; y <= gFlood.yLimits.second; y += 1) {
-        const auto& state = map[y][gFlood.x].mech;
-        if (!state.isUninit() && state.turnN <= turnN) {
-          return state.mechI;
+        const auto& state = map[y][gFlood.x()].mech;
+        if (!state.isEmpty() && state.turnN() <= turnN) {
+          return state.mechI();
         }
       }
       for (int x = gFlood.xLimits.first; x <= gFlood.xLimits.second; x += 1) {
-        const auto& state = map[gFlood.y][x].mech;
-        if (!state.isUninit() && state.turnN <= turnN) {
-          return state.mechI;
+        const auto& state = map[gFlood.y()][x].mech;
+        if (!state.isEmpty() && state.turnN() <= turnN) {
+          return state.mechI();
         }
       }
       return -1;
@@ -339,7 +382,7 @@ class Tokyo {
     //       auto c = q.front();
     //       for (const auto& d : directions) {
     //         auto nc = c + d;
-    //         if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y][nc.x].kind == CellKind::Residential) {
+    //         if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y()][nc.x()].kind == CellKind::Residential) {
     //           continue;
     //         }
     //         steps[nc] = c;
@@ -379,13 +422,13 @@ class Tokyo {
       for (int i = 0; i < mechs.size(); i += 1) {
         const auto& m = mechs[i];
         mechQueue.push(m.pos);
-        map[m.pos.y][m.pos.x].mech = MechState(i);
+        map[m.pos.y()][m.pos.x()].mech = MechState(i);
       }
       return true;
     }
 
     void tryAddSurrounding(const Coords& c) {
-      auto& cell = map[c.y][c.x];
+      auto& cell = map[c.y()][c.x()];
       if (cell.kind == CellKind::Residential) {
         return;
       }
@@ -394,8 +437,8 @@ class Tokyo {
         if (!isPosValid(nc)) {
           continue;
         }
-        const auto& prev = map[nc.y][nc.x].mech;
-        if (!prev.isUninit()) {
+        const auto& prev = map[nc.y()][nc.x()].mech;
+        if (!prev.isEmpty()) {
           mechQueue.push(c);
           cell.mech = MechState(prev, c);
           return;
@@ -406,22 +449,22 @@ class Tokyo {
     void refreshMechsState(int maxTurn) {
       while (!mechQueue.empty()) {
         const auto& c = mechQueue.front();
-        const auto& prevCell = map[c.y][c.x];
-        if (prevCell.mech.turnN >= maxTurn) {
+        const auto& prevCell = map[c.y()][c.x()];
+        if (prevCell.mech.turnN() >= maxTurn) {
           break;
         }
 
         for (const auto& d : directions) {
           const auto nc = c + d;
-          auto& currCell = map[nc.y][nc.x];
+          auto& currCell = map[nc.y()][nc.x()];
           if (!isPosValid(nc) || currCell.kind == CellKind::Residential) {
             continue;
           }
           auto state = MechState(prevCell.mech, c);
-          if (currCell.mech.isUninit()) {
+          if (currCell.mech.isEmpty()) {
             currCell.mech = state;
             mechQueue.push(nc);
-          } else if (currCell.mech.turnN > state.turnN) {
+          } else if (currCell.mech.turnN() > state.turnN()) {
             currCell.mech = state;
           }
         }
@@ -454,11 +497,11 @@ class Tokyo {
         for (int x = 0; x < width; x += 1) {
           Coords p(y, x);
           if (p == gPos) {
-            std::cout << (char)CellType::Godzilla;
+            std::cout << (char)CellName::Godzilla;
           } else if (mechsPos.find(p) != mechsPos.end()) {
-            std::cout << (char)CellType::Mech;
+            std::cout << (char)CellName::Mech;
           } else {
-            std::cout << (char)CellKindName[map[y][x].kind];
+            std::cout << (char)CellKindName::name(map[y][x].kind);
           }
         }
         std::cout << std::endl;
@@ -473,13 +516,13 @@ class Tokyo {
       for (int y = 0; y < height; y += 1) {
         for (int x = 0; x < width; x += 1) {
           const auto& m = map[y][x].mech;
-          if (m.turnN >= 0) {
-            std::cout << m.turnN % 10;
+          if (m.turnN() >= 0) {
+            std::cout << m.turnN() % 10;
           } else {
             if (Coords(y, x) == gPos) {
-              std::cout << (char)CellType::Godzilla;
+              std::cout << (char)CellName::Godzilla;
             } else {
-              std::cout << (char)CellKindName[map[y][x].kind];
+              std::cout << (char)CellKindName::name(map[y][x].kind);
             }
           }
         }
@@ -496,7 +539,7 @@ class Tokyo {
       
       currTurn = 1;
       while (nextGPos) {
-        auto gPosIsResidential = nextGPos && map[nextGPos.y][nextGPos.x].kind == CellKind::Residential;
+        auto gPosIsResidential = nextGPos && map[nextGPos.y()][nextGPos.x()].kind == CellKind::Residential;
 
         const auto newPos = updateGPos();
         refreshGodzFlood();
@@ -545,9 +588,7 @@ class Tokyo {
 };
 const std::vector<Coords> Tokyo::directions = { Coords(-1, 0), Coords(0, 1), Coords(1, 0), Coords(0, -1) };
 
-int main() {
-  initCellKindName(CellKindName);
-  
+int main() {  
   auto& ins = std::cin;
   auto& outs = std::cout;
   
