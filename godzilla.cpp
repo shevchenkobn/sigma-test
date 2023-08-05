@@ -1,9 +1,7 @@
 #include <iostream>
-#include <map>
-#include <stack>
 #include <queue>
 #include <vector>
-#include <functional>
+#include <unordered_map>
 #include <limits>
 #include <climits>
 #include <memory>
@@ -28,14 +26,14 @@ enum class CellName : const char {
 };
 
 class CellKindName {
-  private:
-    static const std::unordered_map<CellKind, CellName> toName;
   public:
-    static const CellName name(CellKind kind) {
+    static const std::unordered_map<CellKind, CellName> toName;
+
+    static inline CellName name(CellKind kind) {
       return toName.at(kind);
     }
 
-    static const CellKind kindOrEmpty(const char name) {
+    static inline CellKind kindOrEmpty(const char name) {
       for (auto p : toName) {
         if (name == (char)p.second) {
           return p.first;
@@ -77,6 +75,7 @@ struct Coords {
     Coords(const Coords& other) = default;
     Coords& operator=(const Coords& other) = default;
     bool operator==(const Coords& other) const = default;
+    bool operator!=(const Coords& other) const = default;
 
     int16_t x() const {
       return x_;
@@ -133,6 +132,7 @@ struct MechState {
       return mechI_;
     }
 
+    // TODO: custom compiler warning that `m.turnN() < smth || m.turnN() == smth` should be used only after `isEmpty()`.
     int32_t turnN() const {
       return turnN_;
     }
@@ -141,13 +141,14 @@ struct MechState {
       return from_;
     }
 
+    MechState(int8_t mechI) : MechState(mechI, 0, Coords::none) {}
+    MechState(const MechState& other, const Coords& from) : mechI_(other.mechI_), turnN_(other.turnN_ + 1), from_(from) {}
+
     MechState() = default;
     MechState(const MechState& other) = default;
     MechState& operator=(const MechState& other) = default;
     bool operator==(const MechState& other) = delete;
-
-    MechState(int8_t mechI) : MechState(mechI, 0, Coords::none) {}
-    MechState(const MechState& other, const Coords& from) : mechI_(other.mechI_), turnN_(other.turnN_ + 1), from_(from) {}
+    bool operator!=(const MechState& other) = delete;
 
     bool isEmpty() const {
       return mechI_ < 0 && turnN_ < 0;
@@ -160,69 +161,136 @@ struct MechState {
 const MechState MechState::none = MechState(-1, -1, Coords::none);
 
 struct Cell {
-  CellKind kind = CellKind::Empty;
-  GodzillaStatus godz = GodzillaStatus::Untouched;
-  MechState mech = MechState::none;
+  private:
+    CellKind kind_ = CellKind::Empty;
+    GodzillaStatus godz_ = GodzillaStatus::Untouched;
+    MechState mech_ = MechState::none;
 
-  Cell() {}
-  Cell(CellKind kind, GodzillaStatus godz, const MechState& mech = MechState::none) : kind(kind), godz(godz), mech(mech) {}
-  Cell(const Cell& other) : kind(other.kind), godz(other.godz), mech(other.mech) {}
+  public:
+    CellKind kind() const {
+      return kind_;
+    }
+
+    CellKind kind(CellKind kind) {
+      return kind_ = kind;
+    }
+
+    GodzillaStatus godz() const {
+      return godz_;
+    }
+
+    GodzillaStatus godz(GodzillaStatus godz) {
+      return godz_ = godz;
+    }
+
+    MechState mech() const {
+      return mech_;
+    }
+
+    MechState mech(const MechState& mech) {
+      return mech_ = mech;
+    }
+
+    Cell(CellKind kind, GodzillaStatus godz, const MechState& mech = MechState::none) : kind_(kind), godz_(godz), mech_(mech) {}
+
+    Cell() = default;
+    Cell(const Cell& other) = default;
+    Cell& operator=(const Cell& other) = default;
+    bool operator==(const Cell& other) = delete;
+    bool operator!=(const Cell& other) = delete;
 };
 
 struct Mech {
-  Coords pos;
-  // std::stack<Coords> path = std::stack<Coords>();
-  // Coords goal = Coords::none;
+  private:
+    Coords pos_;
 
-  Mech(const Coords& pos) : pos(pos) /*goal(pos)*/ {}
-  Mech(const Mech& other) : pos(other.pos) /*path(other.path), goal(other.goal)*/ {}
+  public:
+    Coords pos() const {
+      return pos_;
+    }
+
+    Mech(const Coords& pos) : pos_(pos) {}
+
+    Mech() = delete;
+    Mech(const Mech& other) = default;
+    Mech& operator=(const Mech& mech) = default;
+    bool operator==(const Mech& other) = delete;
+    bool operator!=(const Mech& other) = delete;
 };
 
 struct Flood : Coords {
-  std::pair<int, int> xLimits;
-  std::pair<int, int> yLimits;
+  private:
+    std::pair<int16_t, int16_t> xLimits_;
+    std::pair<int16_t, int16_t> yLimits_;
 
-  Flood(int y, const std::pair<int, int>& xLimits, int x, const std::pair<int, int>& yLimits) : Coords(y, x), xLimits(xLimits), yLimits(yLimits) {}
-  Flood(const Flood& other) : Coords(other), xLimits(other.xLimits), yLimits(other.yLimits) {}
+  public:
+    std::pair<int16_t, int16_t> xLimits() const {
+      return xLimits_;
+    }
+
+    std::pair<int16_t, int16_t>& l_xLimits() {
+      return xLimits_;
+    }
+
+    // std::pair<int16_t, int16_t> xLimits(const std::pair<int16_t, int16_t>& xLimits) {
+    //   return xLimits_ = xLimits;
+    // }
+
+    std::pair<int16_t, int16_t> yLimits() const {
+      return yLimits_;
+    }
+
+    std::pair<int16_t, int16_t>& l_yLimits() {
+      return yLimits_;
+    }
+    
+    // std::pair<int16_t, int16_t> yLimits(const std::pair<int16_t, int16_t>& yLimits) {
+    //   return yLimits_ = yLimits;
+    // }
+
+    Flood(int y, const std::pair<int, int>& xLimits, int x, const std::pair<int, int>& yLimits) : Coords(y, x), xLimits_(xLimits), yLimits_(yLimits) {}
+
+    Flood() = delete;
+    Flood(const Flood& other) = default;
+    Flood& operator=(const Flood& other) = default;
+    bool operator==(const Flood& other) = delete;
+    bool operator!=(const Flood& other) = delete;
 };
 
 class Tokyo {
   std::vector<std::vector<Cell>> map;
-  const int width;
-  const int height;
+  const int16_t width;
+  const int16_t height;
 
   Coords gPos;
-  /**
-   * Readonly vector of mutable objects.
-   */
   std::vector<Mech> mechs;
   Flood gFlood;
-  int currTurn = 0;
+  uint32_t currTurn = 0;
   std::queue<Coords> mechQueue = {};
   Coords nextGPos = Coords::none;
-  int destroyedCount = 0;
+  uint32_t destroyedCount = 0;
 
-  Tokyo(const std::vector<std::vector<Cell>>& map, int width, int height, const Coords& gPos, const std::vector<Mech>& mechs)
+  Tokyo(const std::vector<std::vector<Cell>>& map, int16_t width, int16_t height, const Coords& gPos, const std::vector<Mech>& mechs)
     : map(map), width(width), height(height),
       gPos(gPos), mechs(mechs),
       gFlood(gPos.y(), { gPos.x(), gPos.x() }, gPos.x(), { gPos.y(), gPos.y() }) {}
   
   public:
-    static const std::vector<Coords> directions;
+    static const std::array<Coords, 4> directions;
 
     /**
-     * Input stream is not being closed in the function.
+     * Input stream is not being closed in the function. No more characters are read than the specified size.
      */
     static std::unique_ptr<Tokyo> decode(std::istream& input) {
-      int width, height;
+      int16_t width, height;
       input >> width >> height;
 
       auto map = std::vector<std::vector<Cell>>(height);
-      Coords gPos = Coords::none;
+      auto gPos = Coords::none;
       auto mechs = std::vector<Mech>();
-      for (int y = 0; y < height; y += 1) {
+      for (int16_t y = 0; y < height; y += 1) {
         auto row = std::vector<Cell>(width);
-        for (int x = 0; x < width; x += 1) {
+        for (int16_t x = 0; x < width; x += 1) {
           char c;
           input >> c;
           auto kind = CellKindName::kindOrEmpty(c);
@@ -234,7 +302,7 @@ class Tokyo {
               break;
             }
             case CellName::Mech: {
-              mechs.push_back(Mech(Coords(y, x)));
+              mechs.emplace_back(Mech(Coords(y, x)));
               break;
             }
           }
@@ -244,294 +312,11 @@ class Tokyo {
         map[y] = row;
         input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
+      
       return std::unique_ptr<Tokyo>(new Tokyo(map, width, height, gPos, mechs));
     }
 
-    bool isPosValid(const Coords& p) const {
-      return isPosValid(p.y(), p.x());
-    }
-
-    bool isPosValid(int y, int x) const {
-      return 0 <= y && y < height && 0 <= x && x < width;
-    }
-
-    Coords refreshGodzNext() {
-      nextGPos = getGodzNext();
-      return nextGPos;
-    }
-
-    Coords getGodzNext() const {
-      auto firstUntouched = Coords::none;
-      for (const auto& d : directions) {
-        auto p = gPos + d;
-        if (!isPosValid(p)) {
-          continue;
-        }
-        auto cell = map[p.y()][p.x()];
-        if (cell.godz == GodzillaStatus::Untouched) {
-          if (!firstUntouched) {
-            firstUntouched = p;
-          }
-          if (cell.kind == CellKind::Residential) {
-            return p;
-          }
-        }
-      }
-      return firstUntouched;
-    }
-
-    Coords updateGPos() {
-      if (!nextGPos) {
-        return Coords::none;
-      }
-      auto& cell = map[gPos.y()][gPos.x()];
-      auto& nextCell = map[nextGPos.y()][nextGPos.x()];
-      if (nextCell.kind == CellKind::Residential) {
-        nextCell.kind = CellKind::Destroyed;
-        destroyedCount += 1;
-      }
-      cell.godz = GodzillaStatus::Visited;
-      nextCell.godz = GodzillaStatus::Current;
-      gPos = nextGPos;
-      return nextGPos;
-    }
-
-    /**
-     * If residential cell is found at the boundary, it is included into the flood.
-     */
-    Flood refreshGodzFlood(bool force = false) {
-      Coords b(gFlood.y(), gFlood.x());
-      gFlood.y(gPos.y());
-      gFlood.x(gPos.x());
-      if (force || gPos.y() < b.y() || gPos.x() != b.x()) {
-        for (int d = gPos.y() - 1; d >= 0; d -= 1) {
-          gFlood.yLimits.first = d;
-          if (map[d][gPos.x()].kind == CellKind::Residential) {
-            break;
-          }
-        }
-      }
-      if (force || gPos.y() > b.y() || gPos.x() != b.x()) {
-        for (int d = gPos.y() + 1; d < height; d += 1) {
-          gFlood.yLimits.second = d;
-          if (map[d][gPos.x()].kind == CellKind::Residential) {
-            break;
-          }
-        }
-      }
-      if (force || gPos.x() < b.x() || gPos.y() != b.y()) {
-        for (int d = gPos.x() - 1; d >= 0; d -= 1) {
-          gFlood.xLimits.first = d;
-          if (map[gPos.y()][d].kind == CellKind::Residential) {
-            break;
-          }
-        }
-      }
-      if (force || gPos.x() > b.x() || gPos.y() != b.y()) {
-        for (int d = gPos.x() + 1; d < width; d += 1) {
-          gFlood.xLimits.second = d;
-          if (map[gPos.y()][d].kind == CellKind::Residential) {
-            break;
-          }
-        }
-      }
-      return gFlood;
-    }
-
-    bool isInGFlood(const Coords& p) const {
-      const auto& f = gFlood;
-      return (f.x() == p.x() && f.yLimits.first <= p.y() && p.y() <= f.yLimits.second)
-        || (f.y() == p.y() && f.xLimits.first <= p.x() && p.x() <= f.xLimits.second);
-    }
-
-    // int indexOfMechFire() const {
-    //   for (int i = 0; i < mechs.size(); i += 1) {
-    //     const auto& m = mechs[i];
-    //     if (isInGFlood(m.pos)) {
-    //       return i;
-    //     }
-    //   }
-    //   return -1;
-    // }
-
-    int indexOfMechFire(int turnN) const {
-      for (int y = gFlood.yLimits.first; y <= gFlood.yLimits.second; y += 1) {
-        const auto& state = map[y][gFlood.x()].mech;
-        if (!state.isEmpty() && state.turnN() <= turnN) {
-          return state.mechI();
-        }
-      }
-      for (int x = gFlood.xLimits.first; x <= gFlood.xLimits.second; x += 1) {
-        const auto& state = map[gFlood.y()][x].mech;
-        if (!state.isEmpty() && state.turnN() <= turnN) {
-          return state.mechI();
-        }
-      }
-      return -1;
-    }
-
-    // void refreshMechPaths() {
-    //   for (auto& m : mechs) {
-    //     if (isInGFlood(m.goal)) {
-    //       continue;
-    //     }
-    //     std::queue<Coords> q({ m.pos });
-    //     auto steps = std::unordered_map<Coords, Coords>({ {m.pos, Coords::none} });
-    //     Coords last = Coords::none;
-    //     while (!q.empty()) {
-    //       auto c = q.front();
-    //       for (const auto& d : directions) {
-    //         auto nc = c + d;
-    //         if (!isPosValid(nc) || steps.find(nc) != steps.end() || map[nc.y()][nc.x()].kind == CellKind::Residential) {
-    //           continue;
-    //         }
-    //         steps[nc] = c;
-    //         if (isInGFlood(nc)) {
-    //           last = nc;
-    //           goto rmp1;
-    //         }
-    //         q.push(nc);
-    //       }
-    //       q.pop();
-    //     }
-    //     rmp1: std::queue<Coords>().swap(q); // clear the queue
-    //     if (!last || steps.size() == 1) {
-    //       m.path = std::stack<Coords>();
-    //       continue;
-    //     }
-    //     auto path = std::stack<Coords>();
-    //     auto curr = last;
-    //     while (curr) {
-    //       auto prev = steps[curr];
-    //       if (prev) {
-    //         path.push(curr);
-    //         curr = prev;
-    //       } else {
-    //         break;
-    //       }
-    //     }
-    //     m.path = path;
-    //     m.goal = last;
-    //   }
-    // }
-
-    bool tryInitMechsQueue() {
-      if (!mechQueue.empty()) {
-        return false;
-      }
-      for (int i = 0; i < mechs.size(); i += 1) {
-        const auto& m = mechs[i];
-        mechQueue.push(m.pos);
-        map[m.pos.y()][m.pos.x()].mech = MechState(i);
-      }
-      return true;
-    }
-
-    void tryAddSurrounding(const Coords& c) {
-      auto& cell = map[c.y()][c.x()];
-      if (cell.kind == CellKind::Residential) {
-        return;
-      }
-      for (const auto& d : directions) {
-        const auto& nc = c + d;
-        if (!isPosValid(nc)) {
-          continue;
-        }
-        const auto& prev = map[nc.y()][nc.x()].mech;
-        if (!prev.isEmpty()) {
-          mechQueue.push(c);
-          cell.mech = MechState(prev, c);
-          return;
-        }
-      }
-    }
-
-    void refreshMechsState(int maxTurn) {
-      while (!mechQueue.empty()) {
-        const auto& c = mechQueue.front();
-        const auto& prevCell = map[c.y()][c.x()];
-        if (prevCell.mech.turnN() >= maxTurn) {
-          break;
-        }
-
-        for (const auto& d : directions) {
-          const auto nc = c + d;
-          auto& currCell = map[nc.y()][nc.x()];
-          if (!isPosValid(nc) || currCell.kind == CellKind::Residential) {
-            continue;
-          }
-          auto state = MechState(prevCell.mech, c);
-          if (currCell.mech.isEmpty()) {
-            currCell.mech = state;
-            mechQueue.push(nc);
-          } else if (currCell.mech.turnN() > state.turnN()) {
-            currCell.mech = state;
-          }
-        }
-
-        mechQueue.pop();
-      }
-    }
-
-    // void updateMechsPos() {
-    //   for (auto& m : mechs) {
-    //     if (m.path.empty()) {
-    //       continue;
-    //     }
-    //     m.pos = m.path.top();
-    //     m.path.pop();
-    //   }
-    // }
-
-    #ifdef _DEBUG
-    void _printMap(bool topMargin = true) const {
-      if (topMargin) {
-        std::cout << std::endl;
-      }
-
-      std::unordered_set<Coords> mechsPos;
-      for (auto m : mechs) {
-        mechsPos.insert(m.pos);
-      }
-      for (int y = 0; y < height; y += 1) {
-        for (int x = 0; x < width; x += 1) {
-          Coords p(y, x);
-          if (p == gPos) {
-            std::cout << (char)CellName::Godzilla;
-          } else if (mechsPos.find(p) != mechsPos.end()) {
-            std::cout << (char)CellName::Mech;
-          } else {
-            std::cout << (char)CellKindName::name(map[y][x].kind);
-          }
-        }
-        std::cout << std::endl;
-      }
-    }
-
-    void _printMechMap(bool topMargin = true) const {
-      if (topMargin) {
-        std::cout << std::endl;
-      }
-
-      for (int y = 0; y < height; y += 1) {
-        for (int x = 0; x < width; x += 1) {
-          const auto& m = map[y][x].mech;
-          if (m.turnN() >= 0) {
-            std::cout << m.turnN() % 10;
-          } else {
-            if (Coords(y, x) == gPos) {
-              std::cout << (char)CellName::Godzilla;
-            } else {
-              std::cout << (char)CellKindName::name(map[y][x].kind);
-            }
-          }
-        }
-        std::cout << std::endl;
-      }
-    }
-    #endif
-
-    int simulate() {
+    uint32_t simulate() {
       refreshGodzFlood(true);
       refreshGodzNext();
 
@@ -539,7 +324,7 @@ class Tokyo {
       
       currTurn = 1;
       while (nextGPos) {
-        auto gPosIsResidential = nextGPos && map[nextGPos.y()][nextGPos.x()].kind == CellKind::Residential;
+        auto gPosIsResidential = nextGPos && map[nextGPos.y()][nextGPos.x()].kind() == CellKind::Residential;
 
         const auto newPos = updateGPos();
         refreshGodzFlood();
@@ -562,31 +347,227 @@ class Tokyo {
       return destroyedCount;
     }
 
-    // int simulate() {
-    //   refreshGodzFlood(true);
-    //   refreshGodzNext();
-    //   while (true) {
-    //     const auto newPos = updateGPos();
-    //     if (newPos) {
-    //       refreshGodzFlood();
-    //       if (indexOfMechFire() >= 0) {
-    //         return destroyedCount;
-    //       }
-    //       refreshGodzNext();
-    //     }
-    //     refreshMechPaths();
-    //     updateMechsPos();
-    //     #ifdef _DEBUG
-    //     _printMap();
-    //     #endif
-    //     if (indexOfMechFire() >= 0) {
-    //       return destroyedCount;
-    //     }
-    //   }
-    //   return destroyedCount;
-    // }
+    protected:
+      bool isPosValid(const Coords& p) const {
+        return isPosValid(p.y(), p.x());
+      }
+
+      bool isPosValid(int16_t y, int16_t x) const {
+        return 0 <= y && y < height && 0 <= x && x < width;
+      }
+
+      Coords refreshGodzNext() {
+        nextGPos = getGodzNext();
+        return nextGPos;
+      }
+
+      Coords getGodzNext() const {
+        auto firstUntouched = Coords::none;
+        for (const auto& d : directions) {
+          auto p = gPos + d;
+          if (!isPosValid(p)) {
+            continue;
+          }
+          auto cell = map[p.y()][p.x()];
+          if (cell.godz() == GodzillaStatus::Untouched) {
+            if (!firstUntouched) {
+              firstUntouched = p;
+            }
+            if (cell.kind() == CellKind::Residential) {
+              return p;
+            }
+          }
+        }
+        return firstUntouched;
+      }
+
+      Coords updateGPos() {
+        if (!nextGPos) {
+          return Coords::none;
+        }
+        auto& cell = map[gPos.y()][gPos.x()];
+        auto& nextCell = map[nextGPos.y()][nextGPos.x()];
+        if (nextCell.kind() == CellKind::Residential) {
+          nextCell.kind(CellKind::Destroyed);
+          destroyedCount += 1;
+        }
+        cell.godz(GodzillaStatus::Visited);
+        nextCell.godz(GodzillaStatus::Current);
+        gPos = nextGPos;
+        return nextGPos;
+      }
+
+      /**
+       * If residential cell is found at the boundary, it is included into the flood.
+       */
+      Flood refreshGodzFlood(bool force = false) {
+        Coords prevGPos(gFlood.y(), gFlood.x());
+        gFlood.y(gPos.y());
+        gFlood.x(gPos.x());
+        if (force || gPos.y() < prevGPos.y() || gPos.x() != prevGPos.x()) {
+          for (int d = gPos.y() - 1; d >= 0; d -= 1) {
+            gFlood.l_yLimits().first = d;
+            if (map[d][gPos.x()].kind() == CellKind::Residential) {
+              break;
+            }
+          }
+        }
+        if (force || gPos.y() > prevGPos.y() || gPos.x() != prevGPos.x()) {
+          for (int d = gPos.y() + 1; d < height; d += 1) {
+            gFlood.l_yLimits().second = d;
+            if (map[d][gPos.x()].kind() == CellKind::Residential) {
+              break;
+            }
+          }
+        }
+        if (force || gPos.x() < prevGPos.x() || gPos.y() != prevGPos.y()) {
+          for (int d = gPos.x() - 1; d >= 0; d -= 1) {
+            gFlood.l_xLimits().first = d;
+            if (map[gPos.y()][d].kind() == CellKind::Residential) {
+              break;
+            }
+          }
+        }
+        if (force || gPos.x() > prevGPos.x() || gPos.y() != prevGPos.y()) {
+          for (int d = gPos.x() + 1; d < width; d += 1) {
+            gFlood.l_xLimits().second = d;
+            if (map[gPos.y()][d].kind() == CellKind::Residential) {
+              break;
+            }
+          }
+        }
+        return gFlood;
+      }
+
+      bool isInGFlood(const Coords& p) const {
+        const auto& f = gFlood;
+        return (f.x() == p.x() && f.yLimits().first <= p.y() && p.y() <= f.yLimits().second)
+          || (f.y() == p.y() && f.xLimits().first <= p.x() && p.x() <= f.xLimits().second);
+      }
+
+      int indexOfMechFire(int turnN) const {
+        for (int y = gFlood.yLimits().first; y <= gFlood.yLimits().second; y += 1) {
+          const auto& state = map[y][gFlood.x()].mech();
+          if (!state.isEmpty() && state.turnN() <= turnN) {
+            return state.mechI();
+          }
+        }
+        for (int x = gFlood.xLimits().first; x <= gFlood.xLimits().second; x += 1) {
+          const auto& state = map[gFlood.y()][x].mech();
+          if (!state.isEmpty() && state.turnN() <= turnN) {
+            return state.mechI();
+          }
+        }
+        return -1;
+      }
+
+      bool tryInitMechsQueue() {
+        if (!mechQueue.empty()) {
+          return false;
+        }
+        for (int i = 0; i < mechs.size(); i += 1) {
+          const auto& m = mechs[i];
+          mechQueue.push(m.pos());
+          map[m.pos().y()][m.pos().x()].mech(MechState(i));
+        }
+        return true;
+      }
+
+      void tryAddSurrounding(const Coords& p) {
+        auto& cell = map[p.y()][p.x()];
+        if (cell.kind() == CellKind::Residential) {
+          return;
+        }
+        for (const auto& d : directions) {
+          const auto& next = p + d;
+          if (!isPosValid(next)) {
+            continue;
+          }
+          const auto& prev = map[next.y()][next.x()].mech();
+          if (!prev.isEmpty()) {
+            mechQueue.push(p);
+            cell.mech(MechState(prev, p));
+            return;
+          }
+        }
+      }
+
+      void refreshMechsState(int maxTurn) {
+        while (!mechQueue.empty()) {
+          const auto& curr = mechQueue.front();
+          const auto& prevCell = map[curr.y()][curr.x()];
+          if (prevCell.mech().turnN() >= maxTurn) {
+            break;
+          }
+
+          for (const auto& d : directions) {
+            const auto next = curr + d;
+            auto& currCell = map[next.y()][next.x()];
+            if (!isPosValid(next) || currCell.kind() == CellKind::Residential) {
+              continue;
+            }
+            auto state = MechState(prevCell.mech(), curr);
+            if (currCell.mech().isEmpty()) {
+              currCell.mech(state);
+              mechQueue.push(next);
+            } else if (currCell.mech().turnN() > state.turnN()) {
+              currCell.mech(state);
+            }
+          }
+
+          mechQueue.pop();
+        }
+      }
+
+      #ifdef _DEBUG
+      void _printMap(bool topMargin = true) const {
+        if (topMargin) {
+          std::cout << std::endl;
+        }
+
+        std::unordered_set<Coords> mechsPos;
+        for (auto m : mechs) {
+          mechsPos.emplace(m.pos());
+        }
+        for (int y = 0; y < height; y += 1) {
+          for (int x = 0; x < width; x += 1) {
+            Coords p(y, x);
+            if (p == gPos) {
+              std::cout << (char)CellName::Godzilla;
+            } else if (mechsPos.find(p) != mechsPos.end()) {
+              std::cout << (char)CellName::Mech;
+            } else {
+              std::cout << (char)CellKindName::name(map[y][x].kind());
+            }
+          }
+          std::cout << std::endl;
+        }
+      }
+
+      void _printMechMap(bool topMargin = true) const {
+        if (topMargin) {
+          std::cout << std::endl;
+        }
+
+        for (int y = 0; y < height; y += 1) {
+          for (int x = 0; x < width; x += 1) {
+            const auto& m = map[y][x].mech();
+            if (m.turnN() >= 0) {
+              std::cout << m.turnN() % 10;
+            } else {
+              if (Coords(y, x) == gPos) {
+                std::cout << (char)CellName::Godzilla;
+              } else {
+                std::cout << (char)CellKindName::name(map[y][x].kind());
+              }
+            }
+          }
+          std::cout << std::endl;
+        }
+      }
+      #endif
 };
-const std::vector<Coords> Tokyo::directions = { Coords(-1, 0), Coords(0, 1), Coords(1, 0), Coords(0, -1) };
+const std::array<Coords, 4> Tokyo::directions = { Coords(-1, 0), Coords(0, 1), Coords(1, 0), Coords(0, -1) };
 
 int main() {  
   auto& ins = std::cin;
